@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "cdc/sidekiq"
-
 require "minitest/autorun"
+require "cdc/sidekiq"
