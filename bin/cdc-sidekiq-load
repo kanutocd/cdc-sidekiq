@@ -1,0 +1,212 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "benchmark"
+require "etc"
+require "json"
+require "time"
+require "cdc/core"
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+begin
+  require "cdc/sidekiq"
+rescue LoadError => e
+  warn "Unable to load cdc-sidekiq: #{e.message}"
+  warn "Run with `bundle exec bin/cdc-sidekiq-load` from the gem checkout."
+  exit 1
+end
+
+# A cdc-sidekiq load benchmark inspired by Sidekiq's bin/sidekiqload.
+#
+# Sidekiq's benchmark creates a large number of no-op jobs and drains them as
+# fast as possible to measure queue, JSON, Redis, and thread overhead. This
+# benchmark keeps the same spirit but measures the downstream cdc-sidekiq shape:
+# one Sidekiq-style job payload containing many work items drained through a
+# CDC runtime primitive.
+#
+# Examples:
+#   COUNT=500000 RUNTIME=direct bin/cdc-sidekiq-load
+#   COUNT=500000 RUNTIME=concurrent CDC_CONCURRENCY=100 bin/cdc-sidekiq-load
+#   COUNT=500000 RUNTIME=parallel CDC_PARALLEL_SIZE=7 bin/cdc-sidekiq-load
+#
+# Environment:
+#   COUNT              total work items to process, default: 500_000
+#   BATCH_SIZE         items per process_many call, default: COUNT
+#   RUNTIME            direct, concurrent, or parallel, default: concurrent
+#   CDC_CONCURRENCY    Async task limit for cdc-concurrent, default: 100
+#   CDC_PARALLEL_SIZE  Ractor worker count for cdc-parallel, default: Etc.nprocessors - 1
+#   CDC_TIMEOUT        per-item timeout in seconds, default: nil
+#   PRESERVE_ORDER     true/false for cdc-concurrent, default: true
+#   WARMUP             warmup items before timing, default: 10_000
+# rubocop:disable Metrics/AbcSize
+module CdcSidekiqLoad
+  module_function
+
+  def env_integer(name, default)
+    value = ENV.fetch(name, nil)
+    return default if value.nil? || value.empty?
+
+    Integer(value)
+  rescue ArgumentError
+    warn "#{name} must be an integer"
+    exit 1
+  end
+
+  def env_float(name, default)
+    value = ENV.fetch(name, nil)
+    return default if value.nil? || value.empty?
+
+    Float(value)
+  rescue ArgumentError
+    warn "#{name} must be a float"
+    exit 1
+  end
+
+  def env_boolean(name, default)
+    value = ENV.fetch(name, nil)
+    return default if value.nil? || value.empty?
+
+    case value.downcase
+    when "1", "true", "yes", "on" then true
+    when "0", "false", "no", "off" then false
+    else
+      warn "#{name} must be true or false"
+      exit 1
+    end
+  end
+
+  def format_number(value)
+    value.to_s.reverse.gsub(/(\d{3})(?=\d)/, "\\1,").reverse
+  end
+
+  # No-op processor used to mirror Sidekiq's no-op load benchmark.
+  class NoopProcessor
+    def self.ractor_safe? = true
+
+    def concurrent_safe? = true
+
+    def process(item)
+      item
+    end
+  end
+
+  Config = Data.define(
+    :count,
+    :batch_size,
+    :runtime,
+    :parallel_size,
+    :concurrency,
+    :timeout,
+    :preserve_order,
+    :warmup
+  )
+
+  def config
+    count = env_integer("COUNT", 500_000)
+    Config.new(
+      count:,
+      batch_size: env_integer("BATCH_SIZE", count),
+      runtime: ENV.fetch("RUNTIME", "concurrent").to_sym,
+      parallel_size: env_integer("CDC_PARALLEL_SIZE", [Etc.nprocessors - 1, 1].max),
+      concurrency: env_integer("CDC_CONCURRENCY", 100),
+      timeout: env_float("CDC_TIMEOUT", nil),
+      preserve_order: env_boolean("PRESERVE_ORDER", true),
+      warmup: env_integer("WARMUP", [count / 50, 10_000].min)
+    )
+  end
+
+  def runtime_for(config)
+    CDC::Sidekiq::Runtime.new(
+      processor: NoopProcessor.new,
+      runtime: config.runtime,
+      parallel_size: config.parallel_size,
+      concurrency: config.concurrency,
+      timeout: config.timeout,
+      preserve_order: config.preserve_order
+    )
+  end
+
+  def each_batch(count, batch_size)
+    produced = 0
+    while produced < count
+      size = [batch_size, count - produced].min
+      yield Array.new(size) { |offset| produced + offset }
+      produced += size
+    end
+  end
+
+  def drain(runtime, count, batch_size)
+    processed = 0
+
+    each_batch(count, batch_size) do |items|
+      results = runtime.process_many(items)
+      processed += results.length
+    end
+
+    processed
+  end
+
+  # rubocop:disable Metrics/MethodLength
+  def main
+    config = self.config
+    runtime = runtime_for(config)
+
+    puts "cdc-sidekiq-load"
+    puts "started_at=#{Time.now.iso8601}"
+    puts "ruby=#{RUBY_DESCRIPTION}"
+    puts "runtime=#{config.runtime}"
+    puts "count=#{format_number(config.count)}"
+    puts "batch_size=#{format_number(config.batch_size)}"
+    puts "cdc_parallel_size=#{config.parallel_size}"
+    puts "cdc_concurrency=#{config.concurrency}"
+    puts "timeout=#{config.timeout.inspect}"
+    puts "preserve_order=#{config.preserve_order}"
+    puts "warmup=#{format_number(config.warmup)}"
+    puts
+
+    if config.warmup.positive?
+      warmup_count = [config.warmup, config.count].min
+      drain(runtime, warmup_count, [config.batch_size, warmup_count].min)
+    end
+
+    gc_before = GC.stat
+    elapsed = Benchmark.realtime do
+      processed = drain(runtime, config.count, config.batch_size)
+      raise "processed #{processed}, expected #{config.count}" unless processed == config.count
+    end
+    gc_after = GC.stat
+
+    throughput = config.count / elapsed
+
+    puts "processed=#{format_number(config.count)}"
+    puts "elapsed=#{format("%.6f", elapsed)} sec"
+    puts "throughput=#{format_number(throughput.round)} items/sec"
+    puts "gc_count=#{gc_after.fetch(:count) - gc_before.fetch(:count)}"
+
+    if ENV["JSON"] == "1"
+      puts JSON.pretty_generate(
+        benchmark: "cdc-sidekiq-load",
+        ruby: RUBY_DESCRIPTION,
+        runtime: config.runtime,
+        count: config.count,
+        batch_size: config.batch_size,
+        cdc_parallel_size: config.parallel_size,
+        cdc_concurrency: config.concurrency,
+        timeout: config.timeout,
+        preserve_order: config.preserve_order,
+        warmup: config.warmup,
+        elapsed_seconds: elapsed,
+        throughput_per_second: throughput,
+        gc_count: gc_after.fetch(:count) - gc_before.fetch(:count)
+      )
+    end
+  rescue CDC::Sidekiq::RuntimeLoadError => e
+    warn e.message
+    exit 1
+  end
+  # rubocop:enable Metrics/MethodLength
+end
+# rubocop:enable Metrics/AbcSize
+
+CdcSidekiqLoad.main
