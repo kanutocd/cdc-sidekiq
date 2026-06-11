@@ -9,10 +9,11 @@ RuboCop::RakeTask.new(:rubocop) do |task|
 end
 
 TEST_GROUPS = {
-  unit: "test/unit/**/*_test.rb",
-  integration: "test/integration/**/*_test.rb",
-  behavior: "test/behavior/**/*_test.rb",
-  performance: "test/performance/**/*_test.rb"
+  unit: "test/unit/**/*_test.rb"
+  # uncomment lines below when these tests are in
+  # integration: "test/integration/**/*_test.rb",
+  # behavior: "test/behavior/**/*_test.rb",
+  # performance: "test/performance/**/*_test.rb"
 }.freeze
 
 GROUPED_TESTS = %i[unit integration behavior].freeze
