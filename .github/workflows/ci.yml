@@ -28,3 +28,6 @@ jobs:
           bundler-cache: true
       - name: Run the default task
         run: COVERAGE=true bundle exec rake
+      - name: Validate RBS signatures
+        run: bundle exec rake rbs:validate
+
