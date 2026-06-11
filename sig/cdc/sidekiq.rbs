@@ -1,0 +1,22 @@
+module CDC
+  # Integration layer between Sidekiq and CDC execution primitives.
+  module Sidekiq
+    self.@configuration: Configuration
+
+    # Read the process-wide cdc-sidekiq configuration.
+    #
+    # @return [Configuration] mutable global configuration object.
+    def self.configuration: () -> Configuration
+
+    # Configure process-wide defaults for CDC-aware Sidekiq jobs.
+    #
+    # @yieldparam configuration [Configuration] mutable configuration object.
+    # @return [Configuration] configured global configuration object.
+    def self.configure: () ?{ (Configuration) -> void } -> Configuration
+
+    # Reset process-wide configuration to defaults.
+    #
+    # @return [Configuration] new default configuration object.
+    def self.reset_configuration!: () -> Configuration
+  end
+end

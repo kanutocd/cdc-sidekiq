@@ -1,0 +1,54 @@
+module CDC
+  module Sidekiq
+    # Runtime defaults shared by CDC-aware Sidekiq jobs.
+    #
+    # The configuration intentionally describes only the CDC execution layer.
+    # Sidekiq still owns queue selection, scheduling, retries, durability, and
+    # job concurrency. cdc-sidekiq owns runtime selection for work performed
+    # inside a Sidekiq job.
+    class Configuration
+      @default_runtime: Symbol
+
+      @parallel_size: Integer
+
+      @concurrency: Integer
+
+      @timeout: Float?
+
+      @preserve_order: bool
+
+      @raise_on_failure: bool
+
+      @batch_payloads: bool
+
+      # @return [Symbol] default runtime used when a job does not declare one.
+      attr_accessor default_runtime: Symbol
+
+      # @return [Integer] default number of Ractor workers for cdc-parallel jobs.
+      attr_accessor parallel_size: Integer
+
+      # @return [Integer] default number of Async tasks for cdc-concurrent jobs.
+      attr_accessor concurrency: Integer
+
+      # @return [Float, nil] default per-item timeout passed to CDC processor pools.
+      attr_accessor timeout: Float?
+
+      # @return [Boolean] default result-ordering policy for cdc-concurrent jobs.
+      attr_accessor preserve_order: bool
+
+      # @return [Boolean] default failure policy for processor jobs.
+      attr_accessor raise_on_failure: bool
+
+      # @return [Boolean] whether array payloads should be processed with #process_many by default.
+      attr_accessor batch_payloads: bool
+
+      # @return [void]
+      def initialize: () -> void
+
+      # Build an immutable copy so job-level overrides cannot mutate globals.
+      #
+      # @return [Configuration] independent copy of this configuration.
+      def dup: () -> Configuration
+    end
+  end
+end

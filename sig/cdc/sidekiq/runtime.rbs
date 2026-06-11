@@ -1,0 +1,85 @@
+module CDC
+  module Sidekiq
+    # Executes a CDC processor through one of the CDC runtime primitives.
+    #
+    # Runtime is intentionally selected outside Sidekiq's own concurrency
+    # setting. Sidekiq concurrency controls how many jobs run at once. This
+    # object controls how one CDC-aware job fans work out internally.
+    class Runtime
+      @processor: untyped
+
+      @runtime: untyped
+
+      @parallel_size: untyped
+
+      @concurrency: untyped
+
+      @timeout: untyped
+
+      @preserve_order: untyped
+
+      # @param processor [Object] CDC processor object that responds to #process.
+      # @param runtime [Symbol] execution runtime, currently :parallel, :concurrent, or :direct.
+      # @param parallel_size [Integer] number of Ractors used by cdc-parallel.
+      # @param concurrency [Integer] number of Async tasks used by cdc-concurrent.
+      # @param timeout [Float, nil] optional timeout passed to the selected runtime.
+      # @param preserve_order [Boolean] whether cdc-concurrent should preserve input order.
+      # @return [void]
+            def initialize: (
+        processor: untyped,
+        runtime: Symbol | String,
+        parallel_size: Integer,
+        concurrency: Integer,
+        timeout: Float?,
+        preserve_order: bool
+      ) -> void
+
+      # Process one work item through the selected runtime.
+      #
+      # @param item [Object] work item passed to the processor.
+      # @return [Object] processor result returned by the selected runtime.
+      def process: (untyped item) -> untyped
+
+      # Process many work items through the selected runtime.
+      #
+      # @param items [Array<Object>] work items passed to the processor.
+      # @return [Array<Object>] processor results returned by the selected runtime.
+      def process_many: (Array[untyped] items) -> Array[untyped]
+
+      private
+
+      attr_reader processor: untyped
+
+      attr_reader runtime: Symbol
+
+      attr_reader parallel_size: Integer
+
+      attr_reader concurrency: Integer
+
+      attr_reader timeout: Float?
+
+      attr_reader preserve_order: bool
+
+      def with_pool: () { (untyped) -> untyped } -> untyped
+
+      def build_pool: () -> untyped
+
+      # Minimal runtime used for tests and simple sequential execution.
+      class DirectPool
+        @processor: untyped
+
+        # @param processor [Object] CDC processor object that responds to #process.
+        # @return [void]
+        def initialize: (untyped processor) -> void
+
+        # @param item [Object] work item passed to the processor.
+        # @return [Object] processor result returned by the processor.
+        def process: (untyped item) -> untyped
+
+        # @param items [Array<Object>] work items passed to the processor.
+        # @return [Array<Object>] processor results returned by the processor.
+        def process_many: (Array[untyped] items) -> Array[untyped]
+      end
+    end
+  end
+end

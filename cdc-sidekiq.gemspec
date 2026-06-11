@@ -31,8 +31,8 @@ Gem::Specification.new do |spec|
     "benchmark/README.md",
     "LICENSE.txt"
   ]
-  spec.add_dependency "cdc-core", ">= 0.1"
-  spec.add_dependency "sidekiq", ">= 7.0"
+  spec.add_dependency "cdc-core", "~> 0.1.3"
+  spec.add_dependency "sidekiq", "~> 8.1"
 
   # Runtime gems are optional so applications can install only the execution
   # substrate they need. Jobs using :parallel require cdc-parallel. Jobs using
