@@ -208,4 +208,47 @@ class ProcessorJobTest < Minitest::Test
 
     assert_nil job_class.cdc_timeout
   end
+
+  def test_job_timeout_nil_overrides_global_timeout
+    install_fake_runtime("concurrent", <<~RUBY)
+      module CDC
+        module Concurrent
+          class ProcessorPool
+            def self.last_options = @last_options
+            def initialize(processor:, concurrency:, timeout:, preserve_order:)
+              @processor = processor
+              self.class.instance_variable_set(
+                :@last_options,
+                { processor: processor, concurrency: concurrency, timeout: timeout, preserve_order: preserve_order }
+              )
+            end
+            def process(item) = @processor.process(item)
+            def process_many(items) = items.map { |item| @processor.process(item) }.freeze
+            def shutdown = (@shutdown = true)
+          end
+        end
+      end
+    RUBY
+    CDC::Sidekiq.configure { |config| config.timeout = 9.0 }
+    job_class = Class.new do
+      include CDC::Sidekiq::ProcessorJob
+      cdc_runtime :concurrent
+      cdc_processor RecordingProcessor
+      cdc_timeout nil
+    end
+
+    result = job_class.new.perform("a")
+
+    assert_equal "a", result.value
+    assert_nil CDC::Concurrent::ProcessorPool.last_options.fetch(:timeout)
+  end
+
+  private
+
+  def install_fake_runtime(name, source)
+    dir = File.join(Dir.pwd, "tmp", "fake_#{name}_runtime")
+    FileUtils.mkdir_p(File.join(dir, "cdc"))
+    File.write(File.join(dir, "cdc", "#{name}.rb"), source)
+    $LOAD_PATH.unshift(dir) unless $LOAD_PATH.include?(dir)
+  end
 end
