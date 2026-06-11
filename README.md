@@ -292,7 +292,7 @@ COUNT=500000 RUNTIME=parallel CDC_PARALLEL_SIZE=7 \
   bundle exec bin/cdc-sidekiq-load
 ```
 
-See [`benchmark/README.md`](benchmark/README.md) for interpretation notes and all benchmark knobs.
+See [`benchmark/README.md`](https://github.com/kanutocd/cdc-sidekiq/tree/main/benchmark) for interpretation notes and all benchmark knobs.
 
 ## Current scope
 
