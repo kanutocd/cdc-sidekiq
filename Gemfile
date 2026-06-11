@@ -18,7 +18,7 @@ gem "yard", "~> 0.9.44"
 # Runtime gems are optional so applications can install only the execution
 # substrate they need. Jobs using :parallel require cdc-parallel. Jobs using
 # :concurrent require cdc-concurrent
-gem "cdc-parallel", "~> 0.2.3"
 gem "cdc-concurrent", "~> 0.1.1"
+gem "cdc-parallel", "~> 0.2.3"
 
 gem "benchmark", "~> 0.5.0"

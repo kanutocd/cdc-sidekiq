@@ -1,5 +1,10 @@
 # cdc-sidekiq
 
+[![Gem Version](https://badge.fury.io/rb/cdc-sidekiq.svg)](https://badge.fury.io/rb/cdc-sidekiq)
+[![CI](https://github.com/kanutocd/cdc-sidekiq/workflows/CI/badge.svg)](https://github.com/kanutocd/cdc-sidekiq/actions)
+[![Ruby Version](https://img.shields.io/badge/ruby-%3E%3D%203.4-ruby.svg)](https://www.ruby-lang.org/en/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 `cdc-sidekiq` integrates Sidekiq with CDC execution primitives.
 
 Sidekiq remains the durable job system. It owns scheduling, retries, queues, Redis persistence, and operational behavior.
@@ -11,6 +16,9 @@ Sidekiq Job
       |
       v
 CDC::Sidekiq::ProcessorJob
+      |
+      +--> :direct
+      |       sequential processor calls
       |
       +--> cdc-parallel
       |       Ractor fan-out / fan-in
@@ -59,7 +67,7 @@ CDC primitives execute the work.
 
 The open-source edition focuses on execution primitives.
 
-Current and planned OSS capabilities:
+Current OSS capabilities:
 
 - `:direct` runtime
 - `:concurrent` runtime
@@ -85,7 +93,7 @@ cdc-sidekiq
 cdc-orchestrator-pro
     Hybrid runtime
     Nested runtime / worker-local resource pools
-    orchestration, backpressure, telemetry, tuning
+    Orchestration, backpressure, telemetry, tuning
 ```
 
 This keeps the OSS gem small and useful while leaving operational orchestration to the commercial layer.
@@ -136,9 +144,9 @@ Runtime support depends on the selected CDC execution substrate:
 
 | Runtime | Ruby | Required gems |
 | --- | --- | --- |
-| `:direct` | 3.4+ | `cdc-core` |
-| `:concurrent` | 3.4+ | `cdc-core`, `cdc-concurrent` |
-| `:parallel` | 4.0+ | `cdc-core`, `cdc-parallel` |
+| `:direct` | 3.4+ | `sidekiq`, `cdc-core` |
+| `:concurrent` | 3.4+ | `sidekiq`, `cdc-core`, `cdc-concurrent` |
+| `:parallel` | 4.0+ | `sidekiq`, `cdc-core`, `cdc-parallel` |
 
 `cdc-parallel` remains optional because it requires Ruby 4+. Ruby 3.4 users can still use `:direct` and `:concurrent`.
 
@@ -151,9 +159,11 @@ gem "cdc-sidekiq"
 Runtime gems are installed by the application according to the execution model it uses:
 
 ```ruby
-gem "cdc-parallel"   # for Ractor-backed execution
 gem "cdc-concurrent" # for Async-backed execution
+gem "cdc-parallel"   # for Ractor-backed execution
 ```
+
+Applications that only use `:direct` do not need either optional runtime gem.
 
 ## Configuration
 
@@ -165,9 +175,23 @@ Sidekiq.configure_server do |_config|
     cdc.concurrency = 100
     cdc.timeout = nil
     cdc.preserve_order = true
+    cdc.raise_on_failure = true
+    cdc.batch_payloads = true
   end
 end
 ```
+
+Configuration defaults:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `default_runtime` | `:concurrent` | Runtime used when a job does not declare `cdc_runtime`. |
+| `parallel_size` | `Etc.nprocessors - 1`, minimum `1` | Ractor worker count for `:parallel` jobs. |
+| `concurrency` | `100` | Async task limit for `:concurrent` jobs. |
+| `timeout` | `nil` | Optional per-item timeout passed to CDC processor pools. |
+| `preserve_order` | `true` | Preserve input order for `:concurrent` result arrays. |
+| `raise_on_failure` | `true` | Raise failed `ProcessorResult` objects so Sidekiq can retry. |
+| `batch_payloads` | `true` | Process array payloads with `process_many` instead of treating the array as one item. |
 
 Sidekiq concurrency and CDC runtime concurrency are intentionally separate.
 
@@ -274,7 +298,6 @@ class BestEffortJob
   cdc_raise_on_failure false
 end
 ```
-
 
 ## Benchmarking
 

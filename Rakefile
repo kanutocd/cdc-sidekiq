@@ -93,5 +93,5 @@ namespace :rbs do
   end
 
   desc "Generate disposable RBS prototypes and validate curated signatures"
-  task check: [:prototype, :validate]
+  task check: %i[prototype validate]
 end

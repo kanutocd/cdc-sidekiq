@@ -22,6 +22,8 @@ process_many(items)
 
 This benchmark does **not** replace Sidekiq's Redis-backed load benchmark. It measures the inner execution primitive that a CDC-aware Sidekiq job can use after Sidekiq has already started the job.
 
+Run the benchmark from the gem checkout with `bundle exec`. It does not require Redis or a running Sidekiq process, but the selected optional runtime gem must be installed when using `RUNTIME=concurrent` or `RUNTIME=parallel`.
+
 ## Examples
 
 ```bash
@@ -47,10 +49,10 @@ COUNT=500000 RUNTIME=parallel CDC_PARALLEL_SIZE=7 \
 | `BATCH_SIZE` | Number of items per `process_many` call | `COUNT` |
 | `RUNTIME` | `direct`, `concurrent`, or `parallel` | `concurrent` |
 | `CDC_CONCURRENCY` | Async task limit for `cdc-concurrent` | `100` |
-| `CDC_PARALLEL_SIZE` | Ractor worker count for `cdc-parallel` | `Etc.nprocessors - 1` |
-| `CDC_TIMEOUT` | Per-item timeout in seconds | unset |
-| `PRESERVE_ORDER` | Preserve result order for concurrent runtime | `true` |
-| `WARMUP` | Warmup items before timing | `min(COUNT / 50, 10000)` |
+| `CDC_PARALLEL_SIZE` | Ractor worker count for `cdc-parallel` | `Etc.nprocessors - 1`, minimum `1` |
+| `CDC_TIMEOUT` | Per-item timeout in seconds | `nil` |
+| `PRESERVE_ORDER` | Preserve result order for the `:concurrent` runtime | `true` |
+| `WARMUP` | Warmup items before timing | `min(COUNT / 50, 10_000)` |
 | `JSON` | Print machine-readable JSON when set to `1` | unset |
 
 ## Snapshot: 500,000 No-op Items
@@ -70,9 +72,11 @@ Results:
 | Runtime | Knobs | Elapsed | Throughput | GC count |
 | --- | --- | ---: | ---: | ---: |
 | `direct` | default direct execution | `0.085821 sec` | `5,826,083 items/sec` | `0` |
-| `parallel` | `CDC_PARALLEL_SIZE=7` | `6.613177 sec` | `75,607 items/sec` | `58` |
-| `parallel` | `CDC_PARALLEL_SIZE=7` | `5.830767 sec` | `85,752 items/sec` | `44` |
+| `parallel` | `CDC_PARALLEL_SIZE=7`, run 1 | `6.613177 sec` | `75,607 items/sec` | `58` |
+| `parallel` | `CDC_PARALLEL_SIZE=7`, run 2 | `5.830767 sec` | `85,752 items/sec` | `44` |
 | `concurrent` | `CDC_CONCURRENCY=100` | `12.667181 sec` | `39,472 items/sec` | `45` |
+
+The duplicate `parallel` rows are separate sample runs with the same settings. Keep that variance in mind when comparing small differences between runtimes.
 
 ## Interpretation
 
@@ -122,6 +126,8 @@ CDC_CONCURRENCY=25
 ```
 
 then increase gradually. A concurrency value of `100` can be reasonable for I/O-bound workloads, but it is pure overhead for no-op work.
+
+When comparing results, keep `COUNT`, `BATCH_SIZE`, Ruby version, CPU count, and runtime gem versions fixed. Changing any of those can shift the result more than a runtime tuning change.
 
 ## Benchmark Rule of Thumb
 

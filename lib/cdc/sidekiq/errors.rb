@@ -17,7 +17,7 @@ module CDC
       attr_reader :failures
 
       # @param failures [Array<Object>] failed processor results that should be exposed to Sidekiq retry handling.
-      # @return [void]
+      # @return [void] returns nothing.
       def initialize(failures)
         @failures = failures.freeze
         super("CDC processor failed for #{failures.length} item(s)")

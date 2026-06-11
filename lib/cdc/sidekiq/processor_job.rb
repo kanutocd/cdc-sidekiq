@@ -30,7 +30,7 @@ module CDC
       # Add CDC processor-job class methods to the including job class.
       #
       # @param base [Class] Sidekiq job class including this module.
-      # @return [void]
+      # @return [void] returns nothing.
       def self.included(base)
         base.extend(ClassMethods)
       end

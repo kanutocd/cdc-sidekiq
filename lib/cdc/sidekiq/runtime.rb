@@ -14,7 +14,7 @@ module CDC
       # @param concurrency [Integer] number of Async tasks used by cdc-concurrent.
       # @param timeout [Float, nil] optional timeout passed to the selected runtime.
       # @param preserve_order [Boolean] whether cdc-concurrent should preserve input order.
-      # @return [void]
+      # @return [void] returns nothing.
       def initialize(processor:, runtime:, parallel_size:, concurrency:, timeout:, preserve_order:)
         @processor = processor
         @runtime = runtime.to_sym
@@ -69,7 +69,7 @@ module CDC
       # Minimal runtime used for tests and simple sequential execution.
       class DirectPool
         # @param processor [Object] CDC processor object that responds to #process.
-        # @return [void]
+        # @return [void] returns nothing.
         def initialize(processor)
           @processor = processor
         end

@@ -32,7 +32,7 @@ module CDC
       # @return [Boolean] whether array payloads should be processed with #process_many by default.
       attr_accessor :batch_payloads
 
-      # @return [void]
+      # @return [void] returns nothing.
       def initialize
         @default_runtime = :concurrent
         @parallel_size = [Etc.nprocessors - 1, 1].max

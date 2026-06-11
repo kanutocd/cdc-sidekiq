@@ -11,3 +11,5 @@ Gemfile.lock
 /.history/
 /.vscode/
 *.gem
+# RBS prototypes
+tmp/sig/
